@@ -5,6 +5,7 @@ import readline  # For enhanced REPL history handling
 import os
 import sys
 import io
+import json
 import traceback
 from contextlib import redirect_stdout, redirect_stderr
 
@@ -33,24 +34,54 @@ class LLMEnhancedREPL(code.InteractiveConsole):
         self.history = []  # Track command history with outputs and errors
         self.in_conversation = False  # Track conversation status with LLM
         self.conversation_history = []  # Preserve full conversation context over time
+        self.use_json_mode = False  # Toggle for JSON-based API response mode
 
         # Initialize the system message (REPL description) as part of the conversation
         self.system_message = {
             "role": "system",
-            "content": (
-                "This is an interactive REPL that integrates Python code execution with an AI assistant. "
-                "If the user enters Python code, it will be executed; if they enter plain text, treat it as conversation."
-            )
+            "content": self.get_system_prompt()
         }
         self.conversation_history.append(self.system_message)
 
+    def get_system_prompt(self):
+        if self.use_json_mode:
+            return (
+                "This is an interactive REPL that integrates Python code execution with an AI assistant. "
+                "Respond using a JSON structure with the following top-level keys:\n"
+                "- 'text': Text to display to the user.\n"
+                "- 'code': Code to be executed if any, otherwise null.\n"
+                "- 'should_exec': A boolean indicating whether the code should be executed. "
+                "Use contextual clues to determine this, such as when the user says 'execute,' 'run,' "
+                "or requests an action (e.g., 'print the value of x').\n"
+                "If 'should_exec' is true, the REPL will execute the code in 'code'."
+            )
+        else:
+            return (
+                "This is an interactive REPL that integrates Python code execution with an AI assistant. "
+                "Respond in plain text unless otherwise prompted."
+            )
+
+    def toggle_json_mode(self):
+        self.use_json_mode = not self.use_json_mode
+        # Update system prompt based on the mode
+        self.system_message = {
+            "role": "system",
+            "content": self.get_system_prompt()
+        }
+        # Reset conversation history with updated system prompt
+        self.conversation_history = [self.system_message]
+        print(f"JSON mode {'enabled' if self.use_json_mode else 'disabled'}.")
+
     def push(self, line):
-        # Allow special command to print conversation history
+        # Allow special command to print conversation history or toggle JSON mode
         if line.strip() == "/print_history":
             self.print_conversation_history()
             return
+        elif line.strip() == "/toggle_json_mode":
+            self.toggle_json_mode()
+            return
 
-        # Create DualStream instances for stdout and stderr
+        # Track command and its output/errors
         output_stream = DualStream(sys.stdout)  # For capturing and displaying stdout
         error_stream = DualStream(sys.stderr)  # For capturing and displaying stderr
 
@@ -83,6 +114,12 @@ class LLMEnhancedREPL(code.InteractiveConsole):
         return bool(re.match(r'^[a-zA-Z0-9\s,.\'\"!?]+$', line.strip()))
 
     def handle_prompt(self, user_input):
+        if self.use_json_mode:
+            self.handle_json_prompt(user_input)
+        else:
+            self.handle_standard_prompt(user_input)
+
+    def handle_standard_prompt(self, user_input):
         # Create user message that includes the history of Python commands with outputs and errors
         user_message = {
             "role": "user",
@@ -96,7 +133,7 @@ class LLMEnhancedREPL(code.InteractiveConsole):
         try:
             # Send the conversation history to the OpenAI API for context continuity
             response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",  # Use preferred model
+                model="gpt-4o-mini",
                 messages=self.conversation_history,
                 stream=True  # Stream response
             )
@@ -124,8 +161,47 @@ class LLMEnhancedREPL(code.InteractiveConsole):
         # Clear command history after each prompt submission
         self.history.clear()
 
+    def handle_json_prompt(self, user_input):
+        # Create user message with the history of Python commands and outputs for JSON mode
+        user_message = {
+            "role": "user",
+            "content": (
+                "The following are the last entered Python commands with their outputs and errors:\n\n" +
+                "\n".join(self.history) + "\n\nUser input: " + user_input
+                )
+            }
+        self.conversation_history.append(user_message)
+
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-4o-mini",
+                messages=self.conversation_history
+                )
+
+            # Parse the JSON response safely using json.loads
+            assistant_response = response["choices"][0]["message"]["content"]
+            response_json = json.loads(assistant_response)  # Safely parse JSON
+
+            # Display text to the user
+            print(response_json.get("text", ""))
+
+            # Execute code if `should_exec` is True
+            if response_json.get("should_exec") and response_json.get("code"):
+                self.ask_to_execute_code(response_json["code"])
+
+            # Append assistant's response to conversation history for context
+            self.conversation_history.append({"role": "assistant", "content": assistant_response})
+
+        except json.JSONDecodeError as e:
+            print(f"Error parsing JSON response: {e}")
+        except openai.error.OpenAIError as e:
+            print(f"Error communicating with OpenAI API: {e}")
+            print("Returning to REPL prompt.")
+
+        # Clear command history after each prompt submission
+        self.history.clear()
+
     def extract_code(self, text):
-        # Simple regex to capture code blocks (for now, assume ```python format)
         match = re.search(r"```python\n(.*?)```", text, re.DOTALL)
         return match.group(1) if match else None
 
@@ -146,7 +222,6 @@ class LLMEnhancedREPL(code.InteractiveConsole):
             raise SystemExit
 
     def print_conversation_history(self):
-        # Print the current conversation history for the user
         print("\nConversation History:")
         for msg in self.conversation_history:
             role = msg["role"]
@@ -157,15 +232,15 @@ def main():
     # Set OpenAI API key
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        print("Error: The OPENAI_API_KEY environment variable is not set.")
-        print("Please set the API key to use the LLM-enhanced REPL.")
-        sys.exit(1)
+            print("Error: The OPENAI_API_KEY environment variable is not set.")
+            print("Please set the API key to use the LLM-enhanced REPL.")
+            sys.exit(1)
     
     openai.api_key = api_key
-
+    
     # Start the REPL
     repl = LLMEnhancedREPL()
     repl.interact()
-
+    
 if __name__ == "__main__":
     main()
