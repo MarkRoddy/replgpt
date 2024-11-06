@@ -8,6 +8,7 @@ import io
 import json
 import traceback
 from contextlib import redirect_stdout, redirect_stderr
+from collections import OrderedDict
 
 class DualStream:
     """
@@ -35,6 +36,7 @@ class LLMEnhancedREPL(code.InteractiveConsole):
         self.in_conversation = False  # Track conversation status with LLM
         self.conversation_history = []  # Preserve full conversation context over time
         self.use_json_mode = False  # Toggle for JSON-based API response mode
+        self.file_context = OrderedDict()  # Store file paths and their contents in the order they were added
 
         # Initialize the system message (REPL description) as part of the conversation
         self.system_message = {
@@ -80,6 +82,10 @@ class LLMEnhancedREPL(code.InteractiveConsole):
         elif line.strip() == "/toggle_json_mode":
             self.toggle_json_mode()
             return
+        elif line.startswith("/file_to_context"):
+            _, file_path = line.split(maxsplit=1)
+            self.add_file_to_context(file_path)
+            return
 
         # Track command and its output/errors
         output_stream = DualStream(sys.stdout)  # For capturing and displaying stdout
@@ -109,6 +115,14 @@ class LLMEnhancedREPL(code.InteractiveConsole):
             command_entry += f"\n{errors.strip()}"
         self.history.append(command_entry)
 
+    def add_file_to_context(self, file_path):
+        try:
+            with open(file_path, "r") as file:
+                self.file_context[file_path] = file.read()
+                print(f"File '{file_path}' added to context.")
+        except Exception as e:
+            print(f"Error reading file '{file_path}': {e}")
+
     def is_plain_text(self, line):
         # Heuristic to determine if input is conversation text or bad syntax
         return bool(re.match(r'^[a-zA-Z0-9\s,.\'\"!?]+$', line.strip()))
@@ -119,15 +133,30 @@ class LLMEnhancedREPL(code.InteractiveConsole):
         else:
             self.handle_standard_prompt(user_input)
 
-    def handle_standard_prompt(self, user_input):
-        # Create user message that includes the history of Python commands with outputs and errors
-        user_message = {
+    def build_user_message(self, user_input):
+        # Build user message with command history and file contents
+        message_content = (
+            "The following are the last entered Python commands with their outputs and errors:\n\n" +
+            "\n".join(self.history)
+        )
+
+        # Include file contents if any files are loaded
+        if self.file_context:
+            message_content += "\n\nIncluding file contents:\n"
+            for file_path, file_contents in self.file_context.items():
+                message_content += f"\nFile: {file_path}\n{file_contents}\n"
+
+        # Append user input to the message content
+        message_content += f"\n\nUser input: {user_input}"
+
+        # Create and return the user message structure
+        return {
             "role": "user",
-            "content": (
-                "The following are the last entered Python commands with their outputs and errors:\n\n" +
-                "\n".join(self.history) + "\n\nUser input: " + user_input
-            )
+            "content": message_content
         }
+
+    def handle_standard_prompt(self, user_input):
+        user_message = self.build_user_message(user_input)
         self.conversation_history.append(user_message)
 
         try:
@@ -160,16 +189,10 @@ class LLMEnhancedREPL(code.InteractiveConsole):
 
         # Clear command history after each prompt submission
         self.history.clear()
+        self.file_context.clear()
 
     def handle_json_prompt(self, user_input):
-        # Create user message with the history of Python commands and outputs for JSON mode
-        user_message = {
-            "role": "user",
-            "content": (
-                "The following are the last entered Python commands with their outputs and errors:\n\n" +
-                "\n".join(self.history) + "\n\nUser input: " + user_input
-                )
-            }
+        user_message = self.build_user_message(user_input)
         self.conversation_history.append(user_message)
 
         try:
@@ -200,6 +223,7 @@ class LLMEnhancedREPL(code.InteractiveConsole):
 
         # Clear command history after each prompt submission
         self.history.clear()
+        self.file_context.clear()
 
     def extract_code(self, text):
         match = re.search(r"```python\n(.*?)```", text, re.DOTALL)
