@@ -12,6 +12,44 @@ from collections import OrderedDict
 
 from replgpt import prompt_or_code
 
+
+system_prompt = """
+You are a Python coding assistant embedded within a Python REPL environment. In addition to user
+provided prompts, you will also be supplied with a list of Python code the user has run as well
+as the output from the commands. Use both these to inform how you respond to user prompts.
+Additionally, a user may choose to provide you with the contents of files on their system. This
+is likely going to be the contents of Python files they are working with but in theory it could
+be any type of file. Use this to inform your responses well.
+
+User prompts will likely contain requests to generate Python code. Please do so and follow any
+style or conventions the user requests. Barring that, try to match style and conventions to that
+of any python files provided, and to a lesser extent, match the style of commands run by the user.
+
+Bear in mind that the user will be actively running Python code in the context of the REPL which
+is providing you with prompts. While you may be able to run Python code yourself, there is never
+a case where you should do so, even if they request you to do so. In that case, you should consider
+the request directed at the REPL and not yourself.
+
+Lastly, a REPL environment is constrained to the space provided by a terminal, as such breviaty
+is essential. Please refrain from any unnecessary niceties such as 'have a great day'. In addition,
+refrain from providing examples that were not requested. For example, if a user requests a function
+to be generated, do not provide sample input and/or outputs for this function.
+"""
+
+
+json_system_prompt = (
+    "This is an interactive REPL that integrates Python code execution with an AI assistant. "
+    "Respond using a JSON structure with the following top-level keys:\n"
+    "- 'text': Text to display to the user.\n"
+    "- 'code': Code to be executed if any, otherwise null.\n"
+    "- 'should_exec': A boolean indicating whether the code should be executed. "
+    "Use contextual clues to determine this, such as when the user says 'execute,' 'run,' "
+    "or requests an action (e.g., 'print the value of x').\n"
+    "If 'should_exec' is true, the REPL will execute the code in 'code'."
+    )
+
+
+
 class DualStream:
     """
     Custom stream class to write output to both a target (console) and a buffer (for capturing history).
@@ -49,21 +87,9 @@ class LLMEnhancedREPL(code.InteractiveConsole):
 
     def get_system_prompt(self):
         if self.use_json_mode:
-            return (
-                "This is an interactive REPL that integrates Python code execution with an AI assistant. "
-                "Respond using a JSON structure with the following top-level keys:\n"
-                "- 'text': Text to display to the user.\n"
-                "- 'code': Code to be executed if any, otherwise null.\n"
-                "- 'should_exec': A boolean indicating whether the code should be executed. "
-                "Use contextual clues to determine this, such as when the user says 'execute,' 'run,' "
-                "or requests an action (e.g., 'print the value of x').\n"
-                "If 'should_exec' is true, the REPL will execute the code in 'code'."
-            )
+            return json_system_prompt
         else:
-            return (
-                "This is an interactive REPL that integrates Python code execution with an AI assistant. "
-                "Respond in plain text unless otherwise prompted."
-            )
+            return system_prompt
 
     def toggle_json_mode(self):
         self.use_json_mode = not self.use_json_mode
