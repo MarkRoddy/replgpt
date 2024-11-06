@@ -1,15 +1,12 @@
-Certainly! Here’s a full README.md that you can include with your package.
-
 # replgpt
 
-`replgpt` is an interactive Python REPL enhanced with OpenAI's GPT model for intelligent assistance. This tool allows you to execute Python commands while also receiving guidance and suggestions from a GPT-based assistant.
+`replgpt` is an interactive Python REPL enhanced with OpenAI's GPT models for intelligent assistance. This tool allows you to interleave Python commands and prompting for code generation and guidance from a GPT-based assistant.
 
 ## Features
 
-- **Standard Python REPL**: Execute Python commands directly in the REPL.
-- **GPT-Enhanced Responses**: Enter natural language commands to receive helpful responses from OpenAI's GPT model.
-- **File Context**: Load file contents into context so the assistant can reference them.
-- **Flexible JSON Mode**: Option to toggle JSON mode for structured responses, where the assistant can provide executable code suggestions.
+- **Standard Python REPL**: Execute Python commands directly in the REPL. Code you write and it's results will be automatically added to your chat context.
+- **GPT-Enhanced Responses**: Enter natural language commands to generate code and receive helpful responses from OpenAI's GPT model.
+- **File Context**: Load files into context so your assistant can reference them.
 
 ## Installation
 
@@ -17,22 +14,23 @@ Install `replgpt` directly from PyPI:
 
 ```bash
 pip install replgpt
+```
 
-Usage
+# Usage
 
-Set Up API Key
+## Set Up API Key
 
 Set the OPENAI_API_KEY environment variable with your OpenAI API key:
 
+```bash
 export OPENAI_API_KEY="your-openai-api-key"
-
-Run replgpt
+```
 
 After installing, start the REPL with:
 
 replgpt
 
-Commands
+## Commands
 
 Basic Commands
 
