@@ -10,6 +10,8 @@ import traceback
 from contextlib import redirect_stdout, redirect_stderr
 from collections import OrderedDict
 
+from replgpt import prompt_or_code
+
 class DualStream:
     """
     Custom stream class to write output to both a target (console) and a buffer (for capturing history).
@@ -97,7 +99,7 @@ class LLMEnhancedREPL(code.InteractiveConsole):
                 compiled_code = compile(line, "<stdin>", "single")
                 exec(compiled_code, self.locals)
             except SyntaxError as e:
-                if self.is_plain_text(line):
+                if prompt_or_code.is_prompt(line):
                     self.handle_prompt(line)
                 else:
                     print(f"SyntaxError: {e}")
@@ -122,10 +124,6 @@ class LLMEnhancedREPL(code.InteractiveConsole):
                 print(f"File '{file_path}' added to context.")
         except Exception as e:
             print(f"Error reading file '{file_path}': {e}")
-
-    def is_plain_text(self, line):
-        # Heuristic to determine if input is conversation text or bad syntax
-        return bool(re.match(r'^[a-zA-Z0-9\s,.\'\"!?]+$', line.strip()))
 
     def handle_prompt(self, user_input):
         if self.use_json_mode:
