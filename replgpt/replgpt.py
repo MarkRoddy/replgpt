@@ -229,6 +229,12 @@ class LLMEnhancedREPL(code.InteractiveConsole):
                 print(text, end="", flush=True)
                 full_response += text
 
+            # While we have the full output, check if new need to print a \n char or not. If
+            # we don't do this we get the '>>>' input prompt on the same line as the
+            # LLM response.
+            if not full_response.endswith("\n"):
+                print("")
+
             # Append the assistant's response to conversation history for context
             assistant_message = {"role": "assistant", "content": full_response}
             self.conversation_history.append(assistant_message)
