@@ -7,9 +7,14 @@ build: deps
 	@echo "Building the package..."
 	python setup.py sdist bdist_wheel
 
+# Run tests
+test:
+	@echo "Running tests..."
+	pytest tests/
+
 # System dependencies needed for installing and managing dependencies
 deps: 
-	pip install setuptools wheel twine
+	pip install setuptools wheel twine pytest
 
 # Clean build artifacts
 clean:
