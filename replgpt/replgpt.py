@@ -134,15 +134,46 @@ class LLMEnhancedREPL(code.InteractiveConsole):
                 traceback.print_exc()
 
         # Capture output and errors for history
-        output = output_stream.get_value()
-        errors = error_stream.get_value()
+        raw_output = output_stream.get_value()
+        raw_errors = error_stream.get_value()
 
-        # Store command, output, and errors in history for context
-        command_entry = f">>> {line}\n{output.strip()}"
+        char_thesh = self.retained_char_threshold()
+        output = self.limit_command_output(raw_output, char_thesh)
+        errors = self.limit_command_output(raw_errors, char_thesh)
+        
+        # Store command, output, and errors in history for context    
+        command_entry = f">>> {line}\n{output}"
         if errors.strip():
-            command_entry += f"\n{errors.strip()}"
+            command_entry += f"\n{errors}"
         self.history.append(command_entry)
 
+    def limit_command_output(self, output, char_threshold):
+        """
+        Given a potentially large amount of output from a Python command,
+        thoughtfully limit the size of the output before retaining it for
+        inclusion in our conversation. If the output is less that the
+        character threshold, this function is a no-op.
+        """
+        output = output.strip()
+        if len(output) < char_threshold:
+            return output
+        else:
+            half_threshold = char_threshold // 2
+            beginning = output[:half_threshold]
+            end = output[-half_threshold:]
+            return f"{beginning}\n<output truncated>\n{end}"
+
+    def retained_char_threshold(self):
+        # We don't want to overflow the context window with the output from a runaway
+        # command so we truncate over a certain threshold. This threshold is arbitrarily
+        # decided to be 1% of the total context window for a gpt-4o-mini model, the current
+        # current default model for the repl. This model has a 128,000 token contenxt limit,
+        # and OpenAI states that a token is roughly 4 chars. So we calculate our threshold
+        # here, then use that to limit the command output retained.
+        token_threshold = 128000 * 0.01 
+        char_threshold = token_threshold * 4
+        return int(char_threshold)
+    
     def add_file_to_context(self, file_path):
         try:
             with open(file_path, "r") as file:
