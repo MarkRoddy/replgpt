@@ -15,6 +15,7 @@ test:
 # System dependencies needed for installing and managing dependencies
 deps: 
 	pip install setuptools wheel twine pytest
+	pip install -r requirements.txt
 
 # Clean build artifacts
 clean:
