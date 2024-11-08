@@ -6,7 +6,7 @@ with open("requirements.txt") as f:
 
         setup(
                 name="replgpt",
-                version="0.1.0",
+                version="0.1.1",
                 description="An interactive REPL with GPT-based assistance",
                 long_description=open("README.md").read(),
                 long_description_content_type="text/markdown",
