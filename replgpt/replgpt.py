@@ -6,6 +6,7 @@ import os
 import sys
 import io
 import json
+import readline
 import traceback
 from contextlib import redirect_stdout, redirect_stderr
 from collections import OrderedDict
@@ -331,6 +332,9 @@ class LLMEnhancedREPL(code.InteractiveConsole):
         try:
             exec(code_snippet, self.locals)
             print("Code executed successfully.")
+
+            # Add code to the input history, as if the user typed it themselves
+            readline.add_history(code_snippet)
         except Exception as e:
             print(f"Error executing code: {e}")
         
